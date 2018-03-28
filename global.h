@@ -1,30 +1,26 @@
 #pragma once
 
-enum Sensor {
-	HEART_RATE = 'h',
-	NOISE = 'n',
-	TEMP = 't',
-	ACCEL = 'a',
-	LIGHT = 'l'
-};
+#define LIGHT_ALPHA 0.7
+#define HR_ALPHA 0.999
+#define INF_ALPHA 0.15
+#define INF_PUMP_THRESHOLD 0.9
+#define INF_SOLENOID_THRESHOLD 0.3
 
 struct Threshold {
 	bool isOn;
-	double upperBound;
-	double lowerBound;
+	float upperBound;
+	float lowerBound;
 };
 
-
+static uint16_t incr = 0;
+static uint8_t averageHRInput = 0;
 static uint8_t currHR = 80;
-static double currNoise = 50.0;
+static float currNoise = 50.0;
 static uint8_t currTemp = 60;
-static double currAccel = 1.0;
+static float currAccel = 1.0;
+static float currLight = 1.0;
+static float averageLight = 5.0;
 
-// static Threshold hrThresh = {.isOn = false, .upperBound = 0.0, .lowerBound = 0.0 };
-// static Threshold noiseThresh = {.isOn = false, .upperBound = 0.0, .lowerBound = 0.0 };
-// static Threshold accelThresh = {.isOn = false, .upperBound = 0.0, .lowerBound = 0.0 };
-// static Threshold tempThresh = {.isOn = false, .upperBound = 0.0, .lowerBound = 0.0 };
-// static Threshold lightThresh = {.isOn = false, .upperBound = 0.0, .lowerBound = 0.0 };
 
 static Threshold hrThresh;
 static Threshold noiseThresh;
@@ -32,8 +28,16 @@ static Threshold accelThresh;
 static Threshold tempThresh;
 static Threshold lightThresh;
 
-static bool isProactive;
-static bool shouldInflate;
-static double weight;
+static bool isProactive = false;
+static bool shouldInflate = false;
+static float weight;
 
 static bool inflating = false;
+static float inflationValue = 0.0;
+static uint32_t inflationCountdown = 0;
+static uint8_t prev0HR = 0;
+static uint8_t prev1HR = 0;
+static uint8_t prev2HR = 0;
+static uint8_t prev3HR = 0;
+static uint8_t prev4HR = 0;
+static uint16_t prevT = 0;

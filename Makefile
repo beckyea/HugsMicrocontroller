@@ -8,7 +8,7 @@ ARDMK_DIR         = /usr/local/Arduino-Makefile
 
 ### ARDUINO_DIR
 ### Path to the Arduino application and resources directory.
-ARDUINO_DIR       =  /Users/Becky/Documents/Senior/SeniorDesign/Arduino-master
+ARDUINO_DIR       =  /Users/Becky/Documents/Senior/SeniorDesign/Arduino-reduced
 
 ### USER_LIB_PATH
 ### Path to where the your project's libraries are stored.
@@ -27,7 +27,7 @@ BOARD_TAG         = feather32u4
 ### AVR_TOOLS_DIR
 ### Path to the AVR tools directory such as avr-gcc, avr-g++, etc.
 # AVR_TOOLS_DIR     = /usr/local
-AVR_TOOLS_DIR     =  /Users/Becky/Documents/Senior/SeniorDesign/Arduino-master/hardware/tools/avr
+AVR_TOOLS_DIR     =  /Users/Becky/Documents/Senior/SeniorDesign/Arduino-reduced/hardware/tools/avr
 
 ### AVRDUDE
 ### Path to avrdude directory.
