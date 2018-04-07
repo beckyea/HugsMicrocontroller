@@ -86,11 +86,13 @@ void loop(void) {
 		readValuesFromBLE();
 	}
 	readAnalogInputs();
+	inflationValue = inflationValue * (1-INF_ALPHA) + determineState() * INF_ALPHA;
+	Serial.print(inflationValue); Serial.print(" "); Serial.println(inflationCountdown);
+
 	if (!isProactive) { 
 		inflating = shouldInflate; 
+		inflationCountdown = 0;
 	} else {
-		inflationValue = inflationValue * (1-INF_ALPHA) + determineState() * INF_ALPHA;
-		Serial.println(inflationValue);
 		if (inflationCountdown == 0) {
 			inflating = (inflationValue > INF_PUMP_THRESHOLD);
 			if (inflating) { inflationCountdown = 150000; }
@@ -143,9 +145,9 @@ void readAnalogInputs() {
 	// 	y = (analogRead(A1)-493.0)/100.0;
 	// 	z = (analogRead(A2)-541.0)/105.0;
 	// }
-	Serial.print(analogRead(A0)); Serial.print(" "); Serial.print(analogRead(A1)); Serial.print(" "); Serial.print(analogRead(A2)); Serial.print(" ");
+	//Serial.print(analogRead(A0)); Serial.print(" "); Serial.print(analogRead(A1)); Serial.print(" "); Serial.print(analogRead(A2)); Serial.print(" ");
 	currAccel = abs(pow(x*x+y*y+z*z,0.5) - 1.0);
-	Serial.print(x); Serial.print(" "); Serial.print(y); Serial.print(" "); Serial.print(z); Serial.print(" "); Serial.println(currAccel);
+	//Serial.print(x); Serial.print(" "); Serial.print(y); Serial.print(" "); Serial.print(z); Serial.print(" "); Serial.println(currAccel);
 	currNoise = 0.75 * currNoise + 0.25 * (abs(int(analogRead(A3))-511.0) * 0.488 + 62.514);
 	currLight = analogRead(A5);
 	averageLight = LIGHT_ALPHA * averageLight + (1.0-LIGHT_ALPHA) * currLight;
@@ -178,19 +180,19 @@ void setDigitalOutputs() {
 			digitalWrite(SOLENOID_PIN, HIGH);
 			digitalWrite(PUMP_PIN1, LOW);
 			digitalWrite(PUMP_PIN2, LOW);
-			Serial.println("i, d");
+			//Serial.println("i, d");
 		} else if (inflating && currIntPressure < desiredPressure) {
 			// inflate
 			digitalWrite(SOLENOID_PIN, LOW); 
 			digitalWrite(PUMP_PIN1, HIGH);
 			digitalWrite(PUMP_PIN2, HIGH);
-			Serial.println("i, i");
+			//Serial.println("i, i");
 		} else {
 			// hold pressure
 			digitalWrite(SOLENOID_PIN, LOW); 
 			digitalWrite(PUMP_PIN1, LOW);
 			digitalWrite(PUMP_PIN2, LOW);
-			Serial.println("i, ~");
+			//Serial.println("i, ~");
 		}
 	} else {
 		if (currIntPressure < PRESSURE_ATM) {
@@ -198,7 +200,7 @@ void setDigitalOutputs() {
 			digitalWrite(SOLENOID_PIN, HIGH);
 			digitalWrite(PUMP_PIN1, LOW);
 			digitalWrite(PUMP_PIN2, LOW);
-			Serial.println("d, d");
+			//Serial.println("d, d");
 		} else {
 			// hold pressure
 			digitalWrite(SOLENOID_PIN, LOW);
