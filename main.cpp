@@ -6,8 +6,10 @@
 #include "BluefruitConfig.h"
 #include "global.h"
 
-#define USE_SERIAL 0
 
+#define HUGS_GARMENT 0
+// 1: adult
+// 0: baby
 #ifdef abs
 #undef abs
 #endif
@@ -17,6 +19,10 @@
 #if USE_SERIAL && SOFTWARE_SERIAL_AVAILABLE
   #include <SoftwareSerial.h>
 #endif
+
+#define PUMP_PIN2 13
+#define PRESSURE_ATM 150
+#define SOLENOID_PIN 10
 
 // PREDEFINE FUNCTIONS
 void writeValuesToBLE();
@@ -30,22 +36,23 @@ void readAnalogInputs();
 void readTimedAnalogInputs();
 void calculateLight();
 uint8_t determineState();
-
+void setDigitalOutputs();
 
 Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
-
+float desiredPressure = PRESSURE_ATM + 10;
 
 void setup(void) {
-	if (USE_SERIAL) { 
-		while (!Serial);
-		Serial.begin(115200);
-	}
 	ble.begin(VERBOSE_MODE);
 	ble.echo(false);
 	ble.verbose(false);
-
-	if (!ble.sendCommandCheckOK(F("AT+GAPDEVNAME=HUGS")) && USE_SERIAL ) {
-		Serial.println("Can't set");
+	if (HUGS_GARMENT == 1) {
+		ble.sendCommandCheckOK(F("AT+GAPDEVNAME=ADULT_HUGS"));
+	}
+	if (HUGS_GARMENT == 0) {
+		ble.sendCommandCheckOK(F("AT+GAPDEVNAME=CHILD_HUGS"));
+		digitalWrite(12, LOW);
+		digitalWrite(11, LOW);
+  		digitalWrite(9, LOW);
 	}
 
 	cli();
@@ -57,25 +64,40 @@ void setup(void) {
   	TCCR0B |= (1 << CS01) | (1 << CS00);   
   	TIMSK0 |= (1 << OCIE0A);
   	sei();
+
+  	// set pins
+  	pinMode(PUMP_PIN1, OUTPUT);
+  	pinMode(PUMP_PIN2, OUTPUT);
+  	pinMode(SOLENOID_PIN, OUTPUT);
+  	pinMode(A0, INPUT);
+  	pinMode(A1, INPUT);
+  	pinMode(A2, INPUT);
+  	pinMode(A3, INPUT);
+  	pinMode(A4, INPUT);
+  	pinMode(A5, INPUT);
+  	pinMode(A7, INPUT);
+  	pinMode(A9, INPUT);
 }
 
 void loop(void) {
 	if (ble.isConnected()) {
 		writeValuesToBLE();
-		if (!ble.waitForOK() && USE_SERIAL) {
-			Serial.println("Failed to send");
-		}
+		ble.waitForOK();
 		readValuesFromBLE();
 	}
 	readAnalogInputs();
-	if (!isProactive) { inflating = shouldInflate; }
-	else {
+	if (!isProactive) { 
+		inflating = shouldInflate; 
+	} else {
 		inflationValue = inflationValue * (1-INF_ALPHA) + determineState() * INF_ALPHA;
+		Serial.println(inflationValue);
 		if (inflationCountdown == 0) {
 			inflating = (inflationValue > INF_PUMP_THRESHOLD);
 			if (inflating) { inflationCountdown = 150000; }
 		}
 	}
+	//Serial.print(isProactive); Serial.print(" "); Serial.println(inflating);
+	setDigitalOutputs();
 }
 
 ISR(TIMER0_COMPA_vect){
@@ -97,7 +119,7 @@ void readValuesFromBLE() {
 
 
 void writeValuesToBLE() {
-	ble.print("AT+BLEUARTTX=");
+	ble.print(F("AT+BLEUARTTX="));
 	ble.print('h');
 	ble.print(currHR);
 	ble.print('n');
@@ -111,14 +133,26 @@ void writeValuesToBLE() {
 }
 
 void readAnalogInputs() {
-	float x = (analogRead(A0)-504.0)/108.0;
-	float y = (analogRead(A1)-493.0)/100.0;
-	float z = (analogRead(A2)-541.0)/105.0;
+	float x, y, z;
+	//if (HUGS_GARMENT == 1) {
+		x = (analogRead(A0)-500.0)/108.0;
+		y = (analogRead(A1)-509.0)/100.0;
+		z = (analogRead(A2)-506.0)/105.0;
+	//} else {
+	// 	x = (analogRead(A0)-504.0)/108.0;
+	// 	y = (analogRead(A1)-493.0)/100.0;
+	// 	z = (analogRead(A2)-541.0)/105.0;
+	// }
+//Serial.print(analogRead(A0)); Serial.print(" "); Serial.print(analogRead(A1)); Serial.print(" "); Serial.println(analogRead(A2));
 	currAccel = abs(pow(x*x+y*y+z*z,0.5) - 1.0);
+//Serial.print(x); Serial.print(" "); Serial.print(y); Serial.print(" "); Serial.print(z); Serial.print(" "); Serial.println(currAccel);
 	currNoise = 0.75 * currNoise + 0.25 * (abs(int(analogRead(A3))-511.0) * 0.488 + 62.514);
 	currLight = analogRead(A5);
 	averageLight = LIGHT_ALPHA * averageLight + (1.0-LIGHT_ALPHA) * currLight;
-	currTemp = analogRead(A6)/100.0;
+	//Serial.print(currLight); Serial.print(" "); Serial.println(averageLight);
+	currTemp = -0.2762*analogRead(A9)+156.98;
+	currIntPressure = analogRead(A7);
+	//Serial.print(currIntPressure);
 }
 
 void readTimedAnalogInputs() {
@@ -129,12 +163,52 @@ void readTimedAnalogInputs() {
 	prev0HR = analogRead(A4);
 	averageHRInput = uint8_t(averageHRInput * 0.995 + prev0HR * 0.005);
 	if (prev2HR > averageHRInput + 70 && prev1HR > prev0HR && prev2HR > prev1HR && prev2HR > prev3HR && prev3HR > prev4HR) {
-		uint16_t deltaT = incr - prevT < 0 ? uint32_t(incr - prevT + 65535) : incr - prevT;
+		uint16_t deltaT = int(incr - prevT) < 0 ? uint32_t(incr - prevT + 65535) : incr - prevT;
 		currHR = currHR * HR_ALPHA + (60.0 / (deltaT/1000.0)) * (1-HR_ALPHA);
 		prevT = incr;
 	}
 
 }
+
+void setDigitalOutputs() {
+	Serial.print("curr:"); Serial.print(currIntPressure); Serial.print(" des:"); Serial.println(desiredPressure);
+	if (inflating) {
+		if (currIntPressure > desiredPressure * PRESSURE_THRESHOLD_MULTIPLIER) {
+			// deflate 
+			digitalWrite(SOLENOID_PIN, HIGH);
+			digitalWrite(PUMP_PIN1, LOW);
+			digitalWrite(PUMP_PIN2, LOW);
+			Serial.println("i, d");
+		} else if (inflating && currIntPressure < desiredPressure) {
+			// inflate
+			digitalWrite(SOLENOID_PIN, LOW); 
+			digitalWrite(PUMP_PIN1, HIGH);
+			digitalWrite(PUMP_PIN2, HIGH);
+			Serial.println("i, i");
+		} else {
+			// hold pressure
+			digitalWrite(SOLENOID_PIN, LOW); 
+			digitalWrite(PUMP_PIN1, LOW);
+			digitalWrite(PUMP_PIN2, LOW);
+			Serial.println("i, ~");
+		}
+	} else {
+		if (currIntPressure < PRESSURE_ATM) {
+			// deflate 
+			digitalWrite(SOLENOID_PIN, HIGH);
+			digitalWrite(PUMP_PIN1, LOW);
+			digitalWrite(PUMP_PIN2, LOW);
+			Serial.println("d, d");
+		} else {
+			// hold pressure
+			digitalWrite(SOLENOID_PIN, LOW);
+			digitalWrite(PUMP_PIN1, LOW);
+			digitalWrite(PUMP_PIN2, LOW);
+			Serial.println("d, ~");
+		}
+	}
+}
+
 
 void parseInput(String str) {
 	switch(str[0]) {
@@ -148,11 +222,12 @@ void parseInput(String str) {
 }
 
 uint8_t determineState() {
+	//Serial.println((lightThresh.isOn && (abs(currLight - averageLight) > 50.0)));
 	return ((hrThresh.isOn && (currHR > hrThresh.upperBound ||currHR < hrThresh.lowerBound))|| 
 			(tempThresh.isOn && (currTemp > tempThresh.upperBound ||currTemp < tempThresh.lowerBound)) ||
 		    (noiseThresh.isOn && (currNoise > noiseThresh.upperBound)) ||
 		    (accelThresh.isOn && (currAccel > accelThresh.upperBound)) ||
-		    (lightThresh.isOn && (abs(currLight - averageLight) > 100.0)));
+		    (lightThresh.isOn && (abs(currLight - averageLight) > 50.0)));
 
 }
 
@@ -160,14 +235,14 @@ void parseTULthreshold(Threshold* th, String str) {
 	if (str.length() >= 3) { th->isOn = (str[2] == '1'); } 
 	uint8_t index = 4;
 	String boundString = "";
-	while (index < str.length()-1 && str[index] != ',') { 
+	while (index < str.length() && str[index] != ',') { 
 		boundString += str[index]; 
 		index++;
 	}
 	th->lowerBound = boundString.toDouble();
 	index++;
 	boundString = "";
-	while (index < str.length()-1 && str[index] != '\n') { 
+	while (index < str.length() && str[index] != '\n') { 
 		boundString += str[index]; 
 		index++;
 	}
@@ -178,7 +253,7 @@ void parseTLthreshold(Threshold* th, String str) {
 	if (str.length() >= 3) { th->isOn = (str[2] == '1'); } 
 	uint8_t index = 4;
 	String boundString = "";
-	while (index < str.length()-1 && str[index] != '\n') { 
+	while (index < str.length() && str[index] != '\n') { 
 		boundString += str[index]; 
 		index++;
 	}
@@ -194,9 +269,16 @@ void parseSettings(String str) {
 	if (str.length() >= 5) { shouldInflate = (str[4] == '1'); } 
 	uint8_t index = 6;
 	String string = "";
-	while (index < str.length()-1 && str[index] != '\n') { 
+	while (index < str.length() && str[index] != ',') { 
 		string += str[index]; 
 		index++;
 	}
 	weight = string.toDouble();
+	index++;
+	string = "";
+	while (index < str.length() && str[index] != '\n') { 
+		string += str[index]; 
+		index++;
+	}
+	desiredPressure = PRESSURE_ATM + 100 * (string.toDouble() - .3);
 }
