@@ -135,17 +135,17 @@ void writeValuesToBLE() {
 void readAnalogInputs() {
 	float x, y, z;
 	//if (HUGS_GARMENT == 1) {
-		x = (analogRead(A0)-500.0)/108.0;
-		y = (analogRead(A1)-509.0)/100.0;
-		z = (analogRead(A2)-506.0)/105.0;
+		x = (analogRead(A0)-511.0)/102.0;
+		y = (analogRead(A1)-511.0)/103.0;
+		z = (analogRead(A2)-517.0)/102.0;
 	//} else {
 	// 	x = (analogRead(A0)-504.0)/108.0;
 	// 	y = (analogRead(A1)-493.0)/100.0;
 	// 	z = (analogRead(A2)-541.0)/105.0;
 	// }
-//Serial.print(analogRead(A0)); Serial.print(" "); Serial.print(analogRead(A1)); Serial.print(" "); Serial.println(analogRead(A2));
+	Serial.print(analogRead(A0)); Serial.print(" "); Serial.print(analogRead(A1)); Serial.print(" "); Serial.print(analogRead(A2)); Serial.print(" ");
 	currAccel = abs(pow(x*x+y*y+z*z,0.5) - 1.0);
-//Serial.print(x); Serial.print(" "); Serial.print(y); Serial.print(" "); Serial.print(z); Serial.print(" "); Serial.println(currAccel);
+	Serial.print(x); Serial.print(" "); Serial.print(y); Serial.print(" "); Serial.print(z); Serial.print(" "); Serial.println(currAccel);
 	currNoise = 0.75 * currNoise + 0.25 * (abs(int(analogRead(A3))-511.0) * 0.488 + 62.514);
 	currLight = analogRead(A5);
 	averageLight = LIGHT_ALPHA * averageLight + (1.0-LIGHT_ALPHA) * currLight;
@@ -171,7 +171,7 @@ void readTimedAnalogInputs() {
 }
 
 void setDigitalOutputs() {
-	Serial.print("curr:"); Serial.print(currIntPressure); Serial.print(" des:"); Serial.println(desiredPressure);
+	//Serial.print("curr:"); Serial.print(currIntPressure); Serial.print(" des:"); Serial.println(desiredPressure);
 	if (inflating) {
 		if (currIntPressure > desiredPressure * PRESSURE_THRESHOLD_MULTIPLIER) {
 			// deflate 
@@ -204,7 +204,7 @@ void setDigitalOutputs() {
 			digitalWrite(SOLENOID_PIN, LOW);
 			digitalWrite(PUMP_PIN1, LOW);
 			digitalWrite(PUMP_PIN2, LOW);
-			Serial.println("d, ~");
+			//Serial.println("d, ~");
 		}
 	}
 }
