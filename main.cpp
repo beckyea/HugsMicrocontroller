@@ -87,7 +87,7 @@ void loop(void) {
 	}
 	readAnalogInputs();
 	inflationValue = inflationValue * (1-INF_ALPHA) + determineState() * INF_ALPHA;
-	Serial.print(inflationValue); Serial.print(" "); Serial.println(inflationCountdown);
+	//Serial.print(inflationValue); Serial.print(" "); Serial.println(inflationCountdown);
 
 	if (!isProactive) { 
 		inflating = shouldInflate; 
@@ -130,6 +130,8 @@ void writeValuesToBLE() {
 	ble.print(currTemp);
 	ble.print('a');
 	ble.print(currAccel);
+	ble.print('c');
+	ble.print(currIntPressure - PRESSURE_ATM);
 	ble.print('i');
 	ble.println(inflating ? 1 : 0);
 }
@@ -152,9 +154,9 @@ void readAnalogInputs() {
 	currLight = analogRead(A5);
 	averageLight = LIGHT_ALPHA * averageLight + (1.0-LIGHT_ALPHA) * currLight;
 	//Serial.print(currLight); Serial.print(" "); Serial.println(averageLight);
-	currTemp = -0.2762*analogRead(A9)+156.98;
+	currTemp = int8_t(-0.107382*analogRead(A9)+98.8);
+	//Serial.println(analogRead(A9));
 	currIntPressure = analogRead(A7);
-	//Serial.print(currIntPressure);
 }
 
 void readTimedAnalogInputs() {
@@ -163,10 +165,15 @@ void readTimedAnalogInputs() {
 	prev2HR = prev1HR;
 	prev1HR = prev0HR;
 	prev0HR = analogRead(A4);
-	averageHRInput = uint8_t(averageHRInput * 0.995 + prev0HR * 0.005);
-	if (prev2HR > averageHRInput + 70 && prev1HR > prev0HR && prev2HR > prev1HR && prev2HR > prev3HR && prev3HR > prev4HR) {
-		uint16_t deltaT = int(incr - prevT) < 0 ? uint32_t(incr - prevT + 65535) : incr - prevT;
-		currHR = currHR * HR_ALPHA + (60.0 / (deltaT/1000.0)) * (1-HR_ALPHA);
+	//Serial.print(prev0HR); Serial.print(" ");
+	averageHRInput = averageHRInput * 0.995 + prev0HR * 0.005;
+	if (prev2HR > averageHRInput + 80 && prev1HR > prev0HR && prev2HR > prev1HR && prev2HR > prev3HR && prev3HR > prev4HR) {
+		uint16_t deltaT = incr > prevT ? incr - prevT: uint32_t(incr - prevT + 65535);
+		uint16_t tempHR = (60.0 / (deltaT/1000.0));
+		if (tempHR > currHR - 30 && tempHR < currHR + 30) {
+			currHR = round(currHR * HR_ALPHA + tempHR * (1.0-HR_ALPHA));
+			//Serial.print(prev2HR); Serial.print("  HR: "); Serial.print(tempHR); Serial.print(" "); Serial.println(currHR);
+		} //else { Serial.print("HR: "); Serial.println(tempHR); }
 		prevT = incr;
 	}
 
@@ -197,7 +204,7 @@ void setDigitalOutputs() {
 	} else {
 		if (currIntPressure < PRESSURE_ATM) {
 			// deflate 
-			digitalWrite(SOLENOID_PIN, HIGH);
+			digitalWrite(SOLENOID_PIN, LOW); // technically high
 			digitalWrite(PUMP_PIN1, LOW);
 			digitalWrite(PUMP_PIN2, LOW);
 			//Serial.println("d, d");
@@ -215,8 +222,8 @@ void setDigitalOutputs() {
 void parseInput(String str) {
 	switch(str[0]) {
 		case 'h': parseTULthreshold(&hrThresh, str); break;
-		case 't': parseTLthreshold(&tempThresh, str); break;
-		case 'n': parseTULthreshold(&noiseThresh, str); break;
+		case 't': parseTULthreshold(&tempThresh, str); break;
+		case 'n': parseTLthreshold(&noiseThresh, str); break;
 		case 'a': parseTLthreshold(&accelThresh, str); break;
 		case 'l': parseTthreshold(&lightThresh, str); break;
 		case 's': parseSettings(str); break;
@@ -259,7 +266,7 @@ void parseTLthreshold(Threshold* th, String str) {
 		boundString += str[index]; 
 		index++;
 	}
-	th->lowerBound = boundString.toDouble();
+	th->upperBound = boundString.toDouble();
 }
 
 void parseTthreshold(Threshold* th, String str) {
@@ -282,5 +289,5 @@ void parseSettings(String str) {
 		string += str[index]; 
 		index++;
 	}
-	desiredPressure = PRESSURE_ATM + 100 * (string.toDouble() - .3);
+	desiredPressure = PRESSURE_ATM + 50 * max(string.toDouble(), 0.1);
 }
